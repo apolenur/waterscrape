@@ -61,11 +61,21 @@ class BaltimoreWaterScraper:
 
             logger.debug(f"Found hidden fields: {json.dumps(hidden_fields, indent=2)}")
 
+            # Find the Service Address input field
+            service_address_input = form.find('input', {'id': 'serviceAddress'}) or form.find('input', {'name': 'serviceAddress'})
+            if not service_address_input:
+                logger.error("Service Address input field not found")
+                raise Exception("Could not find Service Address input field")
+
+            # Get the actual field name from the input
+            address_field_name = service_address_input.get('name', 'serviceAddress')
+
             # Prepare search data with all required fields
             search_data = {
                 **hidden_fields,
-                'searchAddress': address,
+                address_field_name: address,
                 'searchType': 'address',
+                'action': 'search',  # This typically indicates the search button action
                 'submit': 'Search'
             }
 
