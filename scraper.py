@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class BaltimoreWaterScraper:
     def __init__(self):
-        self.base_url = "https://pay.baltimorecity.gov/water/bill"
+        self.base_url = "https://pay.baltimorecity.gov/water"
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -21,12 +21,12 @@ class BaltimoreWaterScraper:
             'Content-Type': 'application/x-www-form-urlencoded',
         })
 
-    def get_bill_info(self, address: str) -> Dict[str, str]:
+    def get_bill_info(self, account_number: str) -> Dict[str, str]:
         """
-        Scrapes water bill information for a given address.
+        Scrapes water bill information for a given account number.
 
         Args:
-            address: The address to search for
+            account_number: The water bill account number to search for
 
         Returns:
             Dictionary containing bill information
@@ -35,7 +35,7 @@ class BaltimoreWaterScraper:
             Exception: If scraping fails or data cannot be found
         """
         try:
-            logger.info(f"Fetching bill information for address: {address}")
+            logger.info(f"Fetching bill information for account number: {account_number}")
 
             # Initial page load to get session cookies and tokens
             response = self.session.get(
@@ -61,21 +61,21 @@ class BaltimoreWaterScraper:
 
             logger.debug(f"Found hidden fields: {json.dumps(hidden_fields, indent=2)}")
 
-            # Find the Service Address input field
-            service_address_input = form.find('input', {'id': 'serviceAddress'}) or form.find('input', {'name': 'serviceAddress'})
-            if not service_address_input:
-                logger.error("Service Address input field not found")
-                raise Exception("Could not find Service Address input field")
+            # Find the account number input field
+            account_input = form.find('input', {'id': 'accountNumber'})
+            if not account_input:
+                logger.error("Account number input field not found")
+                raise Exception("Could not find account number input field")
 
             # Get the actual field name from the input
-            address_field_name = service_address_input.get('name', 'serviceAddress')
+            account_field_name = account_input.get('name', 'accountNumber')
 
             # Prepare search data with all required fields
             search_data = {
                 **hidden_fields,
-                address_field_name: address,
-                'searchType': 'address',
-                'action': 'search',  # This typically indicates the search button action
+                account_field_name: account_number,
+                'searchType': 'account',
+                'action': 'search',
                 'submit': 'Search'
             }
 
@@ -136,7 +136,6 @@ class BaltimoreWaterScraper:
         """
         try:
             # Try multiple approaches to find the value
-
             # Approach 1: Direct text search
             elements = soup.find_all(string=re.compile(field_name, re.IGNORECASE))
 
