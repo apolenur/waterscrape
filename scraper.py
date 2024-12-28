@@ -4,6 +4,7 @@ from typing import Dict, Optional
 import time
 import re
 import logging
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -14,7 +15,10 @@ class BaltimoreWaterScraper:
         self.base_url = "https://pay.baltimorecity.gov/water/bill"
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Content-Type': 'application/x-www-form-urlencoded',
         })
 
     def get_bill_info(self, address: str) -> Dict[str, str]:
@@ -41,32 +45,55 @@ class BaltimoreWaterScraper:
             response.raise_for_status()
             logger.info("Successfully loaded initial page")
 
-            # Extract CSRF token or other required form fields
+            # Extract CSRF token and form data
             soup = BeautifulSoup(response.text, 'html.parser')
-            form = soup.find('form')
+            form = soup.find('form', {'method': 'POST'})
+
             if not form:
                 logger.error("Search form not found on page")
+                logger.debug(f"Page content: {soup.prettify()[:500]}...")
                 raise Exception("Could not find search form")
 
-            # Prepare search data
+            # Extract all hidden fields
+            hidden_fields = {}
+            for hidden in form.find_all('input', type='hidden'):
+                hidden_fields[hidden.get('name')] = hidden.get('value', '')
+
+            logger.debug(f"Found hidden fields: {json.dumps(hidden_fields, indent=2)}")
+
+            # Prepare search data with all required fields
             search_data = {
-                'address': address,
-                'search_type': 'address'
+                **hidden_fields,
+                'searchAddress': address,
+                'searchType': 'address',
+                'submit': 'Search'
             }
-            logger.info(f"Submitting search with data: {search_data}")
+
+            logger.info(f"Submitting search with data: {json.dumps(search_data, indent=2)}")
 
             # Submit search
             search_response = self.session.post(
                 self.base_url,
                 data=search_data,
                 timeout=30,
-                headers={'Referer': self.base_url}
+                headers={
+                    'Referer': self.base_url,
+                    'Origin': 'https://pay.baltimorecity.gov'
+                }
             )
+
+            # Log response details for debugging
+            logger.debug(f"Response status: {search_response.status_code}")
+            logger.debug(f"Response headers: {json.dumps(dict(search_response.headers), indent=2)}")
+
             search_response.raise_for_status()
             logger.info("Search request successful")
 
             # Parse results
             results_soup = BeautifulSoup(search_response.text, 'html.parser')
+
+            # Save response HTML for debugging
+            logger.debug(f"Response HTML: {results_soup.prettify()[:1000]}...")
 
             # Extract bill information
             bill_info = {
@@ -87,6 +114,7 @@ class BaltimoreWaterScraper:
 
         except requests.RequestException as e:
             logger.error(f"Network error occurred: {str(e)}")
+            logger.debug(f"Request exception details: {str(e.__dict__)}")
             raise Exception(f"Network error: {str(e)}")
         except Exception as e:
             logger.error(f"Scraping error occurred: {str(e)}")
@@ -97,26 +125,40 @@ class BaltimoreWaterScraper:
         Extracts specific field value from the page.
         """
         try:
-            # Find elements containing the field name
+            # Try multiple approaches to find the value
+
+            # Approach 1: Direct text search
             elements = soup.find_all(string=re.compile(field_name, re.IGNORECASE))
+
+            # Approach 2: Search in table cells
+            if not elements:
+                elements = soup.find_all('td', string=re.compile(field_name, re.IGNORECASE))
+
+            # Approach 3: Search in div elements
+            if not elements:
+                elements = soup.find_all('div', string=re.compile(field_name, re.IGNORECASE))
 
             if not elements:
                 logger.debug(f"Field '{field_name}' not found in page")
                 return 'N/A'
 
-            # Get the parent element
-            field_element = elements[0].parent
-            if not field_element:
-                return 'N/A'
+            for element in elements:
+                # Get the parent element
+                parent = element.parent
 
-            # Find the next sibling or child containing the value
-            value_element = field_element.find_next_sibling() or field_element.find_next()
-            if not value_element:
-                return 'N/A'
+                # Try different ways to find the value
+                value_element = (
+                    parent.find_next_sibling() or
+                    parent.find_next() or
+                    (parent.parent and parent.parent.find_next_sibling())
+                )
 
-            value = value_element.text.strip()
-            logger.debug(f"Extracted value for {field_name}: {value}")
-            return value
+                if value_element:
+                    value = value_element.text.strip()
+                    logger.debug(f"Found value for {field_name}: {value}")
+                    return value
+
+            return 'N/A'
 
         except Exception as e:
             logger.error(f"Error extracting value for {field_name}: {str(e)}")
