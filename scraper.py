@@ -47,7 +47,7 @@ class BaltimoreWaterScraper:
 
             # Extract CSRF token and form data
             soup = BeautifulSoup(response.text, 'html.parser')
-            form = soup.find('form', {'method': 'POST'})
+            form = soup.find('form', {'id': 'accountNumberForm'})
 
             if not form:
                 logger.error("Search form not found on page")
@@ -81,7 +81,7 @@ class BaltimoreWaterScraper:
 
             logger.info(f"Submitting search with data: {json.dumps(search_data, indent=2)}")
 
-            # Submit initial search
+            # Submit search and get water bill details
             search_response = self.session.post(
                 self.base_url,
                 data=search_data,
@@ -97,47 +97,10 @@ class BaltimoreWaterScraper:
             logger.debug(f"Response headers: {json.dumps(dict(search_response.headers), indent=2)}")
 
             search_response.raise_for_status()
-            logger.info("Initial search request successful")
+            logger.info("Search request successful")
 
-            # Parse confirmation page
-            confirmation_soup = BeautifulSoup(search_response.text, 'html.parser')
-
-            # Find the confirmation button
-            confirm_button = confirmation_soup.find('button', {'class': 'btn-accountnumber'})
-            if not confirm_button:
-                logger.error("Confirmation button not found")
-                logger.debug(f"Confirmation page content: {confirmation_soup.prettify()[:1000]}...")
-                raise Exception("Could not find confirmation button")
-
-            # Extract confirmation form data
-            confirm_form = confirm_button.find_parent('form')
-            if not confirm_form:
-                logger.error("Confirmation form not found")
-                raise Exception("Could not find confirmation form")
-
-            # Extract hidden fields from confirmation form
-            confirm_hidden_fields = {}
-            for hidden in confirm_form.find_all('input', type='hidden'):
-                confirm_hidden_fields[hidden.get('name')] = hidden.get('value', '')
-
-            logger.debug(f"Found confirmation hidden fields: {json.dumps(confirm_hidden_fields, indent=2)}")
-
-            # Submit confirmation form
-            confirm_response = self.session.post(
-                self.base_url,
-                data=confirm_hidden_fields,
-                timeout=30,
-                headers={
-                    'Referer': self.base_url,
-                    'Origin': 'https://pay.baltimorecity.gov'
-                }
-            )
-
-            confirm_response.raise_for_status()
-            logger.info("Confirmation request successful")
-
-            # Parse final results page
-            results_soup = BeautifulSoup(confirm_response.text, 'html.parser')
+            # Parse bill details page
+            results_soup = BeautifulSoup(search_response.text, 'html.parser')
 
             # Save response HTML for debugging
             logger.debug(f"Response HTML: {results_soup.prettify()[:1000]}...")
