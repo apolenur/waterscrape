@@ -133,40 +133,35 @@ class BaltimoreWaterScraper:
     def _extract_value(self, soup: BeautifulSoup, field_name: str) -> str:
         """
         Extracts specific field value from the page.
+        Expects fields to be in divs with class="row" containing paragraphs with bold field names.
+        Example structure:
+        <div class="row">
+            <p><b>Current Balance</b> $ 14.00</p>
+        </div>
         """
         try:
-            # Try multiple approaches to find the value
-            # Approach 1: Direct text search
-            elements = soup.find_all(string=re.compile(field_name, re.IGNORECASE))
+            # Find all row divs
+            rows = soup.find_all('div', class_='row')
 
-            # Approach 2: Search in table cells
-            if not elements:
-                elements = soup.find_all('td', string=re.compile(field_name, re.IGNORECASE))
+            for row in rows:
+                # Find paragraph containing the field name
+                p_tag = row.find('p')
+                if not p_tag:
+                    continue
 
-            # Approach 3: Search in div elements
-            if not elements:
-                elements = soup.find_all('div', string=re.compile(field_name, re.IGNORECASE))
+                # Find bold tag with field name
+                b_tag = p_tag.find('b')
+                if not b_tag or not re.search(field_name, b_tag.text, re.IGNORECASE):
+                    continue
 
-            if not elements:
-                logger.debug(f"Field '{field_name}' not found in page")
-                return 'N/A'
+                # Get the full text and remove the field name to get the value
+                full_text = p_tag.text.strip()
+                value = full_text[len(b_tag.text):].strip()
 
-            for element in elements:
-                # Get the parent element
-                parent = element.parent
+                logger.debug(f"Found value for {field_name}: {value}")
+                return value
 
-                # Try different ways to find the value
-                value_element = (
-                    parent.find_next_sibling() or
-                    parent.find_next() or
-                    (parent.parent and parent.parent.find_next_sibling())
-                )
-
-                if value_element:
-                    value = value_element.text.strip()
-                    logger.debug(f"Found value for {field_name}: {value}")
-                    return value
-
+            logger.debug(f"Field '{field_name}' not found in any row")
             return 'N/A'
 
         except Exception as e:
