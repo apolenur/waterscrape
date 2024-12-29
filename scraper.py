@@ -94,7 +94,11 @@ class BaltimoreWaterScraper:
                 'Current Balance': self._extract_value(results_soup, 'Current Balance'),
                 'Previous Balance': self._extract_value(results_soup, 'Previous Balance'),
                 'Last Pay Date': self._extract_value(results_soup, 'Last Pay Date'),
-                'Last Pay Amount': self._extract_value(results_soup, 'Last Pay Amount')
+                'Last Pay Amount': self._extract_value(results_soup, 'Last Pay Amount'),
+                'Current Read Date': self._extract_value(results_soup, 'Current Read Date'),
+                'Current Bill Date': self._extract_value(results_soup, 'Current Bill Date'),
+                'Penalty Date': self._extract_value(results_soup, 'Penalty Date'),
+                'Current Bill Amount': self._extract_value(results_soup, 'Current Bill Amount')
             }
 
             # Validate extracted data

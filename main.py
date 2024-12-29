@@ -79,6 +79,10 @@ def main():
                         "Previous Balance": bill_info.get("Previous Balance", "N/A"),
                         "Last Pay Date": bill_info.get("Last Pay Date", "N/A"),
                         "Last Pay Amount": bill_info.get("Last Pay Amount", "N/A"),
+                        "Current Read Date": bill_info.get("Current Read Date", "N/A"),
+                        "Current Bill Date": bill_info.get("Current Bill Date", "N/A"),
+                        "Penalty Date": bill_info.get("Penalty Date", "N/A"),
+                        "Current Bill Amount": bill_info.get("Current Bill Amount", "N/A"),
                         "Status": "Success"
                     })
                 except Exception as e:
