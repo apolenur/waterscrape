@@ -5,70 +5,20 @@ import time
 from datetime import datetime
 import io
 import pytz
-import hashlib
+from sheets_handler import GoogleSheetsHandler
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Constants
-#SPREADSHEET_ID = "1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY"
-#SHEET_RANGE = "Sheet1!A3:A20"
-
-# Hardcoded credentials (username: admin, password: baltimore2024)
-CREDENTIALS = {
-    'admin': 'c2d5f6374c253ae1677361d33df8a85943dc8c3dc016f44b062ce608ae3da6e2'  # hashed 'baltimore2024'
-}
+SPREADSHEET_ID = "1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY"
+SHEET_RANGE = "Sheet1!B2:B"
 
 st.set_page_config(
     page_title="Baltimore Water Bill Scraper",
     page_icon="💧",
     layout="wide"
 )
-
-def hash_password(password: str) -> str:
-    """Hash password using SHA-256"""
-    return hashlib.sha256(password.encode()).hexdigest()
-
-def authenticate(username: str, password: str) -> bool:
-    """Verify username and password against hardcoded credentials"""
-    if username not in CREDENTIALS:
-        logger.info(f"Login attempt with invalid username: {username}")
-        return False
-
-    hashed_password = hash_password(password)
-    is_valid = CREDENTIALS[username] == hashed_password
-
-    if is_valid:
-        logger.info(f"Successful login for user: {username}")
-    else:
-        logger.info(f"Failed login attempt for user: {username}")
-
-    return is_valid
-
-def show_login_page():
-    """Display login form"""
-    st.title("Baltimore City Water Bill Scraper 💧")
-    st.markdown("### Login")
-
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-
-    if st.button("Login"):
-        if authenticate(username, password):
-            st.session_state.authenticated = True
-            st.session_state.username = username
-            st.rerun()
-        else:
-            st.error("❌ Invalid username or password")
-
-    st.markdown("""
-    ---
-    Default credentials:
-    - Username: admin
-    - Password: baltimore2024
-    """)
 
 def export_to_excel(df: pd.DataFrame) -> bytes:
     """Export DataFrame to Excel bytes buffer"""
@@ -77,28 +27,38 @@ def export_to_excel(df: pd.DataFrame) -> bytes:
         df.to_excel(writer, index=False)
     return output.getvalue()
 
-def show_main_app():
-    """Display main application content"""
+def main():
     st.title("Baltimore City Water Bill Scraper 💧")
 
     # Initialize session state for storing results
     if 'current_results' not in st.session_state:
         st.session_state.current_results = []
 
-    st.markdown(f"""
-    Welcome {st.session_state.username}! This tool fetches water bill information from 
-    [Baltimore City Water](https://pay.baltimorecity.gov/water).
-    """)
+    # Initialize Google Sheets handler
+    sheets_handler = None
+    try:
+        sheets_handler = GoogleSheetsHandler()
+        sheets_handler.authenticate()
+        has_sheets_access = True
+    except Exception as e:
+        has_sheets_access = False
+        st.error("❌ Google Sheets integration unavailable. Please check credentials.")
+        return
 
-    if st.button("Logout"):
-        st.session_state.authenticated = False
-        st.session_state.username = None
-        st.session_state.current_results = []
-        st.rerun()
+    st.markdown("""
+    This tool fetches water bill information from [Baltimore City Water](https://pay.baltimorecity.gov/water)
+    using account numbers stored in [this Google Sheet](https://docs.google.com/spreadsheets/d/1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY).
+    """)
 
     if st.button("Fetch Water Bills"):
         try:
-            st.info("Starting water bill fetch process...")
+            # Read account numbers from sheet
+            account_list = sheets_handler.read_accounts(SPREADSHEET_ID, SHEET_RANGE)
+            if not account_list:
+                st.warning("No account numbers found in the spreadsheet.")
+                return
+
+            st.info(f"Found {len(account_list)} account numbers to process")
 
             # Setup progress tracking
             progress_bar = st.progress(0)
@@ -106,9 +66,6 @@ def show_main_app():
 
             scraper = BaltimoreWaterScraper()
             st.session_state.current_results = []
-
-            # Sample account numbers for testing
-            account_list = ["12345", "67890"]  # Replace with actual account numbers
             total = len(account_list)
 
             # Process each account number
@@ -140,10 +97,10 @@ def show_main_app():
                 progress_bar.progress(idx / total)
                 time.sleep(1)  # Add delay to avoid overwhelming the server
 
-            status_text.text("Processing complete!")
+            status_text.text("Processing complete")
 
         except Exception as e:
-            st.error(f"Failed to process accounts: {str(e)}")
+            st.error(f"Failed to read account numbers: {str(e)}")
             return
 
     # Display results if available
@@ -160,6 +117,38 @@ def show_main_app():
         # Export options
         st.subheader("Export Options")
 
+        # Add container for export status
+        status_container = st.empty()
+        message_container = st.empty()
+        details_container = st.empty()
+
+        if st.button("Save Results to Sheet"):
+            with status_container.container():
+                with st.spinner("Saving data to Google Sheets..."):
+                    try:
+                        # Calculate export range
+                        sheet_name = SHEET_RANGE.split('!')[0]
+                        #export_range = f"{sheet_name}!B1:{chr(65 + len(st.session_state.current_results[0].keys()) - 1)}{len(st.session_state.current_results) + 1}"
+                        export_range = f"{sheet_name}!B1:M{len(st.session_state.current_results) + 1}"
+
+                        export_result = sheets_handler.export_results(
+                            SPREADSHEET_ID,
+                            export_range,
+                            st.session_state.current_results,
+                            list(st.session_state.current_results[0].keys())
+                        )
+
+                        if export_result:
+                            message_container.markdown("### ✅ Save Successful")
+                            details_container.success(f"Saved {len(st.session_state.current_results)} rows to sheet")
+                        else:
+                            message_container.markdown("### ❌ Save Failed")
+                            details_container.error("No response from Google Sheets API")
+
+                    except Exception as e:
+                        message_container.markdown("### ❌ Save Failed")
+                        details_container.error(f"Error: {str(e)}")
+
         # Download as Excel
         excel_data = export_to_excel(current_df)
         st.download_button(
@@ -168,20 +157,6 @@ def show_main_app():
             file_name=f"water_bills_{datetime.now().strftime('%Y%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
-def main():
-    """Main application entry point"""
-    # Initialize session state if not already done
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
-        st.session_state.username = None
-        st.session_state.current_results = []
-
-    # Show login page if not authenticated
-    if not st.session_state.authenticated:
-        show_login_page()
-    else:
-        show_main_app()
 
 if __name__ == "__main__":
     main()
