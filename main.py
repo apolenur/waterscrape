@@ -29,11 +29,9 @@ def export_to_excel(df: pd.DataFrame) -> bytes:
 def main():
     st.title("Baltimore City Water Bill Scraper 💧")
 
-    # Initialize session state for storing results and timestamp
+    # Initialize session state for storing results
     if 'current_results' not in st.session_state:
         st.session_state.current_results = []
-    if 'last_run' not in st.session_state:
-        st.session_state.last_run = None
 
     # Initialize Google Sheets handler
     sheets_handler = None
@@ -51,15 +49,9 @@ def main():
     using account numbers stored in [this Google Sheet](https://docs.google.com/spreadsheets/d/1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY).
     """)
 
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        if st.button("Fetch Water Bills"):
-            st.session_state.last_run = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            try:
-    with col2:
-        if st.session_state.last_run:
-            st.text(f"Last run: {st.session_state.last_run}")
-                # Read account numbers from sheet
+    if st.button("Fetch Water Bills"):
+        try:
+            # Read account numbers from sheet
             account_list = sheets_handler.read_accounts(SPREADSHEET_ID, SHEET_RANGE)
             if not account_list:
                 st.warning("No account numbers found in the spreadsheet.")
@@ -81,6 +73,7 @@ def main():
                 try:
                     bill_info = scraper.get_bill_info(account)
                     st.session_state.current_results.append({
+                        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "Account Number": account,
                         "Address": bill_info.get("Service Address", "N/A"),
                         "Current Balance": bill_info.get("Current Balance", "N/A"),
@@ -91,8 +84,7 @@ def main():
                         "Current Bill Date": bill_info.get("Current Bill Date", "N/A"),
                         "Penalty Date": bill_info.get("Penalty Date", "N/A"),
                         "Current Bill Amount": bill_info.get("Current Bill Amount", "N/A"),
-                        "Status": "Success",
-                        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M")
+                        "Status": "Success"
                     })
                 except Exception as e:
                     st.session_state.current_results.append({
