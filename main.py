@@ -29,9 +29,11 @@ def export_to_excel(df: pd.DataFrame) -> bytes:
 def main():
     st.title("Baltimore City Water Bill Scraper 💧")
 
-    # Initialize session state for storing results
+    # Initialize session state for storing results and timestamp
     if 'current_results' not in st.session_state:
         st.session_state.current_results = []
+    if 'last_run' not in st.session_state:
+        st.session_state.last_run = None
 
     # Initialize Google Sheets handler
     sheets_handler = None
@@ -49,9 +51,15 @@ def main():
     using account numbers stored in [this Google Sheet](https://docs.google.com/spreadsheets/d/1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY).
     """)
 
-    if st.button("Fetch Water Bills"):
-        try:
-            # Read account numbers from sheet
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        if st.button("Fetch Water Bills"):
+            st.session_state.last_run = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            try:
+    with col2:
+        if st.session_state.last_run:
+            st.text(f"Last run: {st.session_state.last_run}")
+                # Read account numbers from sheet
             account_list = sheets_handler.read_accounts(SPREADSHEET_ID, SHEET_RANGE)
             if not account_list:
                 st.warning("No account numbers found in the spreadsheet.")
