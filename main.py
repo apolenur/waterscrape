@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 SPREADSHEET_ID = "1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY"
-SHEET_RANGE = "Sheet1!A2:A"
+SHEET_RANGE = "Sheet1!B2:B"
 
 st.set_page_config(
     page_title="Baltimore Water Bill Scraper",
@@ -127,7 +127,8 @@ def main():
                     try:
                         # Calculate export range
                         sheet_name = SHEET_RANGE.split('!')[0]
-                        export_range = f"{sheet_name}!A1:{chr(65 + len(st.session_state.current_results[0].keys()) - 1)}{len(st.session_state.current_results) + 1}"
+                        #export_range = f"{sheet_name}!B1:{chr(65 + len(st.session_state.current_results[0].keys()) - 1)}{len(st.session_state.current_results) + 1}"
+                        export_range = f"{sheet_name}!B1:M{len(st.session_state.current_results) + 1}"
 
                         export_result = sheets_handler.export_results(
                             SPREADSHEET_ID,
