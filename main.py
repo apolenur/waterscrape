@@ -73,6 +73,7 @@ def main():
                 try:
                     bill_info = scraper.get_bill_info(account)
                     st.session_state.current_results.append({
+                        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "Account Number": account,
                         "Address": bill_info.get("Service Address", "N/A"),
                         "Current Balance": bill_info.get("Current Balance", "N/A"),
@@ -87,6 +88,7 @@ def main():
                     })
                 except Exception as e:
                     st.session_state.current_results.append({
+                        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "Account Number": account,
                         "Current Balance": "Error",
                         "Previous Balance": "Error",
