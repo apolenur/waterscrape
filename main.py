@@ -77,6 +77,17 @@ def troubleshoot_sheets_auth() -> Tuple[bool, Dict[str, str]]:
         )
         diagnostics["credential_creation"] = "✅ Successfully created credentials"
 
+        # Add service account email to diagnostics for easy sharing
+        diagnostics["service_account_email"] = f"🔑 Service Account Email: {creds_data.get('client_email', 'Not found')}"
+        diagnostics["sharing_instructions"] = """
+        To grant access to your spreadsheet:
+        1. Copy the service account email above
+        2. Open your Google Sheet
+        3. Click 'Share' in the top-right corner
+        4. Paste the email and give 'Editor' access
+        5. Click 'Send' (no email notification needed)
+        """
+
         return True, diagnostics
 
     except json.JSONDecodeError:

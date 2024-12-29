@@ -78,6 +78,9 @@ class GoogleSheetsHandler:
 
         Returns:
             List of account numbers
+
+        Raises:
+            ValueError: If there are permission issues or invalid spreadsheet access
         """
         try:
             if not self.service:
@@ -85,10 +88,19 @@ class GoogleSheetsHandler:
                 self.authenticate()
 
             logger.info(f"Reading from spreadsheet {spreadsheet_id}, range {range_name}")
-            result = self.service.spreadsheets().values().get(
-                spreadsheetId=spreadsheet_id,
-                range=range_name
-            ).execute()
+            try:
+                result = self.service.spreadsheets().values().get(
+                    spreadsheetId=spreadsheet_id,
+                    range=range_name
+                ).execute()
+            except Exception as e:
+                if "PERMISSION_DENIED" in str(e):
+                    logger.error(f"Permission denied accessing spreadsheet: {str(e)}")
+                    raise ValueError(
+                        "Permission denied. Please share the spreadsheet with the service account email "
+                        "and ensure it has editor access."
+                    )
+                raise
 
             values = result.get('values', [])
             if not values:
@@ -100,8 +112,13 @@ class GoogleSheetsHandler:
             logger.info(f"Successfully read {len(account_numbers)} account numbers")
             return account_numbers
 
+        except ValueError as e:
+            # Re-raise ValueError with permission guidance
+            raise
         except Exception as e:
             logger.error(f"Error reading from Google Sheet: {str(e)}")
+            if "HttpError 404" in str(e):
+                raise ValueError("Spreadsheet not found. Please check the spreadsheet ID.")
             raise Exception(f"Failed to read account numbers: {str(e)}")
 
     def export_results(self, spreadsheet_id: str, range_name: str, 
