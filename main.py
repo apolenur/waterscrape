@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 SPREADSHEET_ID = "1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY"
-SHEET_RANGE = "Sheet1!A3:A20"
+SHEET_RANGE = "Sheet1!A2:A"
 
 st.set_page_config(
     page_title="Baltimore Water Bill Scraper",
@@ -73,34 +73,30 @@ def main():
                 try:
                     bill_info = scraper.get_bill_info(account)
                     st.session_state.current_results.append({
-                        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "Account Number": account,
                         "Address": bill_info.get("Service Address", "N/A"),
-                        "Current Balance": bill_info.get("Current Balance", "N/A"),
-                        "Previous Balance": bill_info.get("Previous Balance", "N/A"),
-                        "Last Pay Date": bill_info.get("Last Pay Date", "N/A"),
-                        "Last Pay Amount": bill_info.get("Last Pay Amount", "N/A"),
                         "Current Read Date": bill_info.get("Current Read Date", "N/A"),
                         "Current Bill Date": bill_info.get("Current Bill Date", "N/A"),
                         "Penalty Date": bill_info.get("Penalty Date", "N/A"),
                         "Current Bill Amount": bill_info.get("Current Bill Amount", "N/A"),
+                        "Previous Balance": bill_info.get("Previous Balance", "N/A"),
+                        "Current Balance": bill_info.get("Current Balance", "N/A"),
+                        "Last Pay Date": bill_info.get("Last Pay Date", "N/A"),
+                        "Last Pay Amount": bill_info.get("Last Pay Amount", "N/A"),
+                        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "Status": "Success"
                     })
                 except Exception as e:
                     st.session_state.current_results.append({
                         "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "Account Number": account,
-                        "Current Balance": "Error",
-                        "Previous Balance": "Error",
-                        "Last Pay Date": "Error",
-                        "Last Pay Amount": "Error",
                         "Status": str(e)
                     })
 
                 progress_bar.progress(idx / total)
                 time.sleep(1)  # Add delay to avoid overwhelming the server
 
-            status_text.text("Processing complete!")
+            status_text.text("Processing complete")
 
         except Exception as e:
             st.error(f"Failed to read account numbers: {str(e)}")
