@@ -4,6 +4,7 @@ from scraper import BaltimoreWaterScraper
 import time
 from datetime import datetime
 import io
+import pytz
 from sheets_handler import GoogleSheetsHandler
 import logging
 
@@ -83,12 +84,12 @@ def main():
                         "Current Balance": bill_info.get("Current Balance", "N/A"),
                         "Last Pay Date": bill_info.get("Last Pay Date", "N/A"),
                         "Last Pay Amount": bill_info.get("Last Pay Amount", "N/A"),
-                        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "Timestamp": datetime.now(pytz.timezone('US/Eastern')).strftime("%Y-%m-%d %H:%M:%S %Z"),
                         "Status": "Success"
                     })
                 except Exception as e:
                     st.session_state.current_results.append({
-                        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "Timestamp": datetime.now(pytz.timezone('US/Eastern')).strftime("%Y-%m-%d %H:%M:%S %Z"),
                         "Account Number": account,
                         "Status": str(e)
                     })
