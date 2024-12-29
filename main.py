@@ -56,11 +56,11 @@ def main():
         if st.button("Fetch Water Bills"):
             st.session_state.last_run = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             try:
+                # Read account numbers from sheet
+                account_list = sheets_handler.read_accounts(SPREADSHEET_ID, SHEET_RANGE)
     with col2:
         if st.session_state.last_run:
             st.text(f"Last run: {st.session_state.last_run}")
-                # Read account numbers from sheet
-            account_list = sheets_handler.read_accounts(SPREADSHEET_ID, SHEET_RANGE)
             if not account_list:
                 st.warning("No account numbers found in the spreadsheet.")
                 return
