@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 SPREADSHEET_ID = "1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY"
-SHEET_RANGE = "Sheet1!A3:A20"
+SHEET_RANGE = "Sheet1!A2:A"
 
 st.set_page_config(
     page_title="Baltimore Water Bill Scraper",
@@ -46,7 +46,7 @@ def main():
 
     st.markdown("""
     This tool fetches water bill information from [Baltimore City Water](https://pay.baltimorecity.gov/water)
-    using account numbers stored in Google Sheets.
+    using account numbers stored in [this Google Sheet](https://docs.google.com/spreadsheets/d/1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY).
     """)
 
     if st.button("Fetch Water Bills"):
