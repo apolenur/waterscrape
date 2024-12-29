@@ -144,7 +144,7 @@ class BaltimoreWaterScraper:
         
         try:
             # Find all row divs with either class
-            rows = soup.find_all('div', class_=['row', 'rowcontenteditable'])
+            rows = soup.find_all('div', class_=['row', 'rowcontenteditable='])
 
             for row in rows:
                 # Find paragraph containing the field name
