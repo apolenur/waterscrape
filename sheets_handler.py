@@ -142,6 +142,8 @@ class GoogleSheetsHandler:
                 return
 
             logger.info(f"Preparing to export {len(data)} rows to sheet {spreadsheet_id}")
+            logger.debug(f"Export range: {range_name}")
+            logger.debug(f"Headers: {headers}")
 
             # Prepare data for export
             values = [headers]  # First row is headers
@@ -156,14 +158,32 @@ class GoogleSheetsHandler:
 
             # Update the sheet
             logger.info(f"Updating range {range_name}")
-            result = self.service.spreadsheets().values().update(
-                spreadsheetId=spreadsheet_id,
-                range=range_name,
-                valueInputOption='RAW',
-                body=body
-            ).execute()
+            try:
+                result = self.service.spreadsheets().values().update(
+                    spreadsheetId=spreadsheet_id,
+                    range=range_name,
+                    valueInputOption='RAW',
+                    body=body
+                ).execute()
 
-            logger.info(f"Updated {result.get('updatedCells')} cells in Google Sheet")
+                logger.info(f"Updated {result.get('updatedCells')} cells in Google Sheet")
+                return result
+
+            except Exception as e:
+                if "PERMISSION_DENIED" in str(e):
+                    logger.error(f"Permission denied during export: {str(e)}")
+                    raise ValueError(
+                        "Permission denied during export. Please ensure the service account "
+                        "has editor access to the spreadsheet."
+                    )
+                elif "Invalid range" in str(e):
+                    logger.error(f"Invalid range specified: {str(e)}")
+                    raise ValueError(
+                        f"Invalid range '{range_name}'. Please check the sheet name and range format."
+                    )
+                else:
+                    logger.error(f"Error during spreadsheet update: {str(e)}")
+                    raise
 
         except Exception as e:
             logger.error(f"Error exporting to Google Sheet: {str(e)}")

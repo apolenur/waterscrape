@@ -9,6 +9,9 @@ import os
 from google.oauth2 import service_account
 import json
 from typing import Dict, Tuple
+import logging
+
+logger = logging.getLogger(__name__)
 
 st.set_page_config(
     page_title="Baltimore Water Bill Scraper",
@@ -96,6 +99,8 @@ def troubleshoot_sheets_auth() -> Tuple[bool, Dict[str, str]]:
 
 def main():
     st.title("Baltimore City Water Bill Scraper 💧")
+
+    logger.info('FDASFASDFASDFASFASFASFDF')
 
     # Add troubleshooting section in sidebar
     with st.sidebar:
@@ -239,16 +244,35 @@ def main():
         if has_sheets_access and input_method == "Google Sheets Import" and spreadsheet_id:
             if st.button("Export Results to Google Sheets"):
                 try:
-                    current_range = f"{range_name.split('!')[0]}!A{range_name.split('!')[1].split(':')[0].split('A')[1]}"
-                    sheets_handler.export_results(
-                        spreadsheet_id,
-                        f"{current_range}_results",
-                        current_results,
-                        list(current_results[0].keys()) if current_results else []
-                    )
-                    st.success("Successfully exported results to Google Sheets")
+                    logging.info(f"Exporting results to Google Sheets: {spreadsheet_id} - {range_name}")
+
+                    # Calculate export range more reliably
+                    sheet_name = range_name.split('!')[0]
+                    export_range = f"{sheet_name}!A1:{chr(65 + len(current_results[0].keys()) - 1)}{len(current_results) + 1}"
+
+                    logging.info(f"Calculated export range: {export_range}")
+
+                    if current_results:
+                        export_result = sheets_handler.export_results(
+                            spreadsheet_id,
+                            export_range,
+                            current_results,
+                            list(current_results[0].keys())
+                        )
+
+                        if export_result:
+                            st.success(f"Successfully exported {len(current_results)} rows to Google Sheets")
+                            st.info(f"Data exported to sheet: {sheet_name}")
+                    else:
+                        st.warning("No data to export")
+
+                except ValueError as e:
+                    st.error(f"Export failed: {str(e)}")
+                    if "PERMISSION_DENIED" in str(e):
+                        st.info("Please check that you've shared the spreadsheet with the service account email (shown in the troubleshooting section)")
                 except Exception as e:
                     st.error(f"Error exporting to Google Sheets: {str(e)}")
+                    logging.error(f"Export error details: {str(e)}")
 
         # File downloads
         col1, col2 = st.columns(2)
