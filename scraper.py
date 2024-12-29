@@ -143,8 +143,8 @@ class BaltimoreWaterScraper:
         # import pdb; pdb.set_trace()
         
         try:
-            # Find all row divs
-            rows = soup.find_all('div', class_='row')
+            # Find all row divs with either class
+            rows = soup.find_all('div', class_=['row', 'rowcontenteditable'])
 
             for row in rows:
                 # Find paragraph containing the field name
