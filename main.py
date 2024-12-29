@@ -28,13 +28,9 @@ def export_to_excel(df: pd.DataFrame, filename: str) -> bytes:
 def troubleshoot_sheets_auth() -> Tuple[bool, Dict[str, str]]:
     """
     Performs a series of checks to diagnose Google Sheets authentication issues.
-
-    Returns:
-        Tuple of (success: bool, diagnostics: Dict[str, str])
     """
     diagnostics = {}
 
-    # Check 1: Verify GOOGLE_CREDENTIALS environment variable
     if not os.environ.get('GOOGLE_CREDENTIALS'):
         return False, {
             "status": "error",
@@ -43,11 +39,9 @@ def troubleshoot_sheets_auth() -> Tuple[bool, Dict[str, str]]:
         }
 
     try:
-        # Check 2: Validate JSON format
         creds_data = json.loads(os.environ['GOOGLE_CREDENTIALS'])
         diagnostics["json_format"] = "✅ Credentials JSON format is valid"
 
-        # Check 3: Verify required fields
         required_fields = ['type', 'project_id', 'private_key', 'client_email']
         missing_fields = [f for f in required_fields if f not in creds_data]
 
@@ -60,7 +54,6 @@ def troubleshoot_sheets_auth() -> Tuple[bool, Dict[str, str]]:
 
         diagnostics["required_fields"] = "✅ All required credential fields present"
 
-        # Check 4: Verify credential type
         if creds_data['type'] != 'service_account':
             return False, {
                 "status": "error",
@@ -70,14 +63,12 @@ def troubleshoot_sheets_auth() -> Tuple[bool, Dict[str, str]]:
 
         diagnostics["credential_type"] = "✅ Using service account credentials"
 
-        # Check 5: Test credential creation
         creds = service_account.Credentials.from_service_account_info(
             creds_data,
             scopes=['https://www.googleapis.com/auth/spreadsheets']
         )
         diagnostics["credential_creation"] = "✅ Successfully created credentials"
 
-        # Add service account email to diagnostics for easy sharing
         diagnostics["service_account_email"] = f"🔑 Service Account Email: {creds_data.get('client_email', 'Not found')}"
         diagnostics["sharing_instructions"] = """
         To grant access to your spreadsheet:
@@ -196,7 +187,6 @@ def main():
         results_container = st.empty()
 
         current_results = []
-        historical_results = []
         total = len(account_list)
 
         # Process each account number
@@ -208,18 +198,13 @@ def main():
                 # Add current bill info
                 current_results.append({
                     "Account Number": account,
-                    "Address": bill_info['current'].get("Service Address", "N/A"),
-                    "Current Balance": bill_info['current'].get("Current Balance", "N/A"),
-                    "Previous Balance": bill_info['current'].get("Previous Balance", "N/A"),
-                    "Last Pay Date": bill_info['current'].get("Last Pay Date", "N/A"),
-                    "Last Pay Amount": bill_info['current'].get("Last Pay Amount", "N/A"),
+                    "Address": bill_info.get("Service Address", "N/A"),
+                    "Current Balance": bill_info.get("Current Balance", "N/A"),
+                    "Previous Balance": bill_info.get("Previous Balance", "N/A"),
+                    "Last Pay Date": bill_info.get("Last Pay Date", "N/A"),
+                    "Last Pay Amount": bill_info.get("Last Pay Amount", "N/A"),
                     "Status": "Success"
                 })
-
-                # Add historical data
-                for history_entry in bill_info.get('history', []):
-                    history_entry['Account Number'] = account
-                    historical_results.append(history_entry)
 
             except Exception as e:
                 current_results.append({
@@ -234,24 +219,18 @@ def main():
             progress_bar.progress(idx / total)
             time.sleep(1)  # Add delay to avoid overwhelming the server
 
-        # Create DataFrames
+        # Create DataFrame
         current_df = pd.DataFrame(current_results)
-        historical_df = pd.DataFrame(historical_results) if historical_results else None
 
         status_text.text("Processing complete!")
 
-        # Display current results
-        st.subheader("Current Bill Information")
+        # Display results
+        st.subheader("Water Bill Information")
         st.dataframe(
             current_df.style.apply(lambda x: ['background-color: #ffcdd2' if v == 'Error'
                                             else '' for v in x], axis=1),
             use_container_width=True
         )
-
-        # Display historical data if available
-        if historical_df is not None and not historical_df.empty:
-            st.subheader("Bill History")
-            st.dataframe(historical_df, use_container_width=True)
 
         # Export options
         st.subheader("Export Options")
@@ -260,7 +239,6 @@ def main():
         if has_sheets_access and input_method == "Google Sheets Import" and spreadsheet_id:
             if st.button("Export Results to Google Sheets"):
                 try:
-                    # Export current bills
                     current_range = f"{range_name.split('!')[0]}!A{range_name.split('!')[1].split(':')[0].split('A')[1]}"
                     sheets_handler.export_results(
                         spreadsheet_id,
@@ -268,16 +246,6 @@ def main():
                         current_results,
                         list(current_results[0].keys()) if current_results else []
                     )
-
-                    # Export historical data if available
-                    if historical_df is not None and not historical_df.empty:
-                        sheets_handler.export_results(
-                            spreadsheet_id,
-                            f"{current_range}_history",
-                            historical_results,
-                            list(historical_results[0].keys())
-                        )
-
                     st.success("Successfully exported results to Google Sheets")
                 except Exception as e:
                     st.error(f"Error exporting to Google Sheets: {str(e)}")
@@ -286,44 +254,24 @@ def main():
         col1, col2 = st.columns(2)
 
         with col1:
-            # Export current bills to CSV
-            csv_current = current_df.to_csv(index=False)
+            # Export to CSV
+            csv_data = current_df.to_csv(index=False)
             st.download_button(
-                label="Download Current Bills (CSV)",
-                data=csv_current,
-                file_name=f"water_bills_current_{datetime.now().strftime('%Y%m%d')}.csv",
+                label="Download Results (CSV)",
+                data=csv_data,
+                file_name=f"water_bills_{datetime.now().strftime('%Y%m%d')}.csv",
                 mime="text/csv"
             )
 
-            if historical_df is not None and not historical_df.empty:
-                # Export history to CSV
-                csv_history = historical_df.to_csv(index=False)
-                st.download_button(
-                    label="Download Bill History (CSV)",
-                    data=csv_history,
-                    file_name=f"water_bills_history_{datetime.now().strftime('%Y%m%d')}.csv",
-                    mime="text/csv"
-                )
-
         with col2:
-            # Export current bills to Excel
-            excel_current = export_to_excel(current_df, "current_bills")
+            # Export to Excel
+            excel_data = export_to_excel(current_df, "water_bills")
             st.download_button(
-                label="Download Current Bills (Excel)",
-                data=excel_current,
-                file_name=f"water_bills_current_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                label="Download Results (Excel)",
+                data=excel_data,
+                file_name=f"water_bills_{datetime.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
-            if historical_df is not None and not historical_df.empty:
-                # Export history to Excel
-                excel_history = export_to_excel(historical_df, "bill_history")
-                st.download_button(
-                    label="Download Bill History (Excel)",
-                    data=excel_history,
-                    file_name=f"water_bills_history_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
 
 if __name__ == "__main__":
     main()
