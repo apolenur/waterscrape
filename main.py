@@ -28,74 +28,41 @@ def export_to_excel(df: pd.DataFrame, filename: str) -> bytes:
         df.to_excel(writer, index=False)
     return output.getvalue()
 
-def troubleshoot_sheets_auth() -> Tuple[bool, Dict[str, str]]:
+def export_to_sheets(sheets_handler: GoogleSheetsHandler, data: list, spreadsheet_id: str, range_name: str) -> Tuple[bool, str, str]:
     """
-    Performs a series of checks to diagnose Google Sheets authentication issues.
+    Export data to Google Sheets with enhanced error handling and status reporting.
+
+    Returns:
+        Tuple of (success: bool, message: str, details: str)
     """
-    diagnostics = {}
-
-    if not os.environ.get('GOOGLE_CREDENTIALS'):
-        return False, {
-            "status": "error",
-            "message": "GOOGLE_CREDENTIALS environment variable not found",
-            "fix": "Add your Google service account credentials to the GOOGLE_CREDENTIALS secret"
-        }
-
     try:
-        creds_data = json.loads(os.environ['GOOGLE_CREDENTIALS'])
-        diagnostics["json_format"] = "✅ Credentials JSON format is valid"
+        sheet_name = range_name.split('!')[0]
+        export_range = f"{sheet_name}!A1:{chr(65 + len(data[0].keys()) - 1)}{len(data) + 1}"
 
-        required_fields = ['type', 'project_id', 'private_key', 'client_email']
-        missing_fields = [f for f in required_fields if f not in creds_data]
+        logger.info(f"Attempting export to sheet: {sheet_name}, range: {export_range}")
 
-        if missing_fields:
-            return False, {
-                "status": "error",
-                "message": f"Missing required fields: {', '.join(missing_fields)}",
-                "fix": "Ensure your service account credentials contain all required fields"
-            }
-
-        diagnostics["required_fields"] = "✅ All required credential fields present"
-
-        if creds_data['type'] != 'service_account':
-            return False, {
-                "status": "error",
-                "message": "Invalid credential type. Found: " + creds_data['type'],
-                "fix": "Use a service account credential JSON from Google Cloud Console"
-            }
-
-        diagnostics["credential_type"] = "✅ Using service account credentials"
-
-        creds = service_account.Credentials.from_service_account_info(
-            creds_data,
-            scopes=['https://www.googleapis.com/auth/spreadsheets']
+        export_result = sheets_handler.export_results(
+            spreadsheet_id,
+            export_range,
+            data,
+            list(data[0].keys())
         )
-        diagnostics["credential_creation"] = "✅ Successfully created credentials"
 
-        diagnostics["service_account_email"] = f"🔑 Service Account Email: {creds_data.get('client_email', 'Not found')}"
-        diagnostics["sharing_instructions"] = """
-        To grant access to your spreadsheet:
-        1. Copy the service account email above
-        2. Open your Google Sheet
-        3. Click 'Share' in the top-right corner
-        4. Paste the email and give 'Editor' access
-        5. Click 'Send' (no email notification needed)
-        """
+        if export_result:
+            return True, "✅ Export Successful", f"Exported {len(data)} rows to '{sheet_name}'"
+        else:
+            return False, "❌ Export Failed", "No response from Google Sheets API"
 
-        return True, diagnostics
-
-    except json.JSONDecodeError:
-        return False, {
-            "status": "error",
-            "message": "Invalid JSON format in credentials",
-            "fix": "Verify that your credentials JSON is properly formatted"
-        }
+    except ValueError as e:
+        if "PERMISSION_DENIED" in str(e):
+            return False, "❌ Permission Denied", "Please share the spreadsheet with the service account email (see Troubleshooting section)"
+        elif "Invalid range" in str(e):
+            return False, "❌ Invalid Range", f"The sheet '{sheet_name}' might not exist or the range format is incorrect"
+        else:
+            return False, "❌ Validation Error", str(e)
     except Exception as e:
-        return False, {
-            "status": "error",
-            "message": str(e),
-            "fix": "Check the error message and ensure your credentials are correct"
-        }
+        logger.error(f"Export error: {str(e)}")
+        return False, "❌ Export Error", str(e)
 
 def main():
     st.title("Baltimore City Water Bill Scraper 💧")
@@ -246,36 +213,28 @@ def main():
         # Export options
         st.subheader("Export Options")
 
+        # Add container for export status
+        status_container = st.empty()
+        message_container = st.empty()
+        details_container = st.empty()
+
         # Google Sheets export
         if has_sheets_access and input_method == "Google Sheets Import" and st.session_state.spreadsheet_id:
             if st.button("Export Results to Google Sheets"):
-                try:
-                    logging.info(f"Exporting results to Google Sheets: {st.session_state.spreadsheet_id}")
+                with status_container.container():
+                    with st.spinner("Exporting data to Google Sheets..."):
+                        success, message, details = export_to_sheets(
+                            sheets_handler,
+                            st.session_state.current_results,
+                            st.session_state.spreadsheet_id,
+                            st.session_state.range_name
+                        )
 
-                    # Calculate export range more reliably
-                    sheet_name = st.session_state.range_name.split('!')[0]
-                    export_range = f"{sheet_name}!A1:{chr(65 + len(st.session_state.current_results[0].keys()) - 1)}{len(st.session_state.current_results) + 1}"
-
-                    logging.info(f"Calculated export range: {export_range}")
-
-                    export_result = sheets_handler.export_results(
-                        st.session_state.spreadsheet_id,
-                        export_range,
-                        st.session_state.current_results,
-                        list(st.session_state.current_results[0].keys())
-                    )
-
-                    if export_result:
-                        st.success(f"Successfully exported {len(st.session_state.current_results)} rows to Google Sheets")
-                        st.info(f"Data exported to sheet: {sheet_name}")
-
-                except ValueError as e:
-                    st.error(f"Export failed: {str(e)}")
-                    if "PERMISSION_DENIED" in str(e):
-                        st.info("Please check that you've shared the spreadsheet with the service account email (shown in the troubleshooting section)")
-                except Exception as e:
-                    st.error(f"Error exporting to Google Sheets: {str(e)}")
-                    logging.error(f"Export error details: {str(e)}")
+                message_container.markdown(f"### {message}")
+                if success:
+                    details_container.success(details)
+                else:
+                    details_container.error(details)
 
         # File downloads
         col1, col2 = st.columns(2)
