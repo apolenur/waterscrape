@@ -109,6 +109,7 @@ class BaltimoreWaterScraper:
 
             # Extract current bill information
             current_bill_info = {
+                'Service Address': self._extract_value(results_soup, 'Service Address'),
                 'Current Balance': self._extract_value(results_soup, 'Current Balance'),
                 'Previous Balance': self._extract_value(results_soup, 'Previous Balance'),
                 'Last Pay Date': self._extract_value(results_soup, 'Last Pay Date'),

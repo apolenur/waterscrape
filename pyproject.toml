@@ -5,6 +5,10 @@ description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.12.3",
+    "google-api-python-client>=2.156.0",
+    "google-auth>=2.37.0",
+    "google-auth-httplib2>=0.2.0",
+    "google-auth-oauthlib>=1.2.1",
     "openpyxl>=3.1.5",
     "pandas>=2.2.3",
     "requests>=2.32.3",

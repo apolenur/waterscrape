@@ -4,6 +4,7 @@ from scraper import BaltimoreWaterScraper
 import time
 from datetime import datetime
 import io
+from sheets_handler import GoogleSheetsHandler
 
 st.set_page_config(
     page_title="Baltimore Water Bill Scraper",
@@ -23,29 +24,63 @@ def export_to_excel(df: pd.DataFrame, filename: str) -> bytes:
 def main():
     st.title("Baltimore City Water Bill Scraper 💧")
 
+    # Initialize Google Sheets handler
+    sheets_handler = None
+    try:
+        sheets_handler = GoogleSheetsHandler()
+        sheets_handler.authenticate()
+        has_sheets_access = True
+    except Exception as e:
+        has_sheets_access = False
+        st.warning("Google Sheets integration is not available. Please check your credentials.")
+
     st.markdown("""
-    Enter account numbers (one per line) to fetch water bill information from 
+    Enter account numbers directly or import them from Google Sheets to fetch water bill information from 
     [Baltimore City Water](https://pay.baltimorecity.gov/water).
     """)
 
-    # Input area for account numbers
-    account_numbers = st.text_area(
-        "Enter account numbers (one per line):",
-        height=150,
-        help="Enter each Baltimore water bill account number on a new line"
+    # Input method selection
+    input_method = st.radio(
+        "Choose input method:",
+        ["Manual Input", "Google Sheets Import"] if has_sheets_access else ["Manual Input"]
     )
 
+    account_list = []
+
+    if input_method == "Manual Input":
+        # Input area for account numbers
+        account_numbers = st.text_area(
+            "Enter account numbers (one per line):",
+            height=150,
+            help="Enter each Baltimore water bill account number on a new line"
+        )
+        if account_numbers.strip():
+            account_list = [acc.strip() for acc in account_numbers.strip().split('\n') if acc.strip()]
+    else:
+        # Google Sheets input
+        col1, col2 = st.columns(2)
+        with col1:
+            spreadsheet_id = st.text_input(
+                "Enter Google Spreadsheet ID:",
+                help="You can find this in the spreadsheet URL"
+            )
+        with col2:
+            range_name = st.text_input(
+                "Enter Range (e.g., Sheet1!A2:A10):",
+                help="Specify the range containing account numbers"
+            )
+
+        if spreadsheet_id and range_name:
+            try:
+                account_list = sheets_handler.read_accounts(spreadsheet_id, range_name)
+                st.success(f"Successfully loaded {len(account_list)} account numbers from Google Sheets")
+            except Exception as e:
+                st.error(f"Error reading from Google Sheets: {str(e)}")
+                account_list = []
+
     if st.button("Fetch Water Bills"):
-        if not account_numbers.strip():
-            st.error("Please enter at least one account number.")
-            return
-
-        # Parse account numbers
-        account_list = account_numbers.strip().split('\n')
-        account_list = [acc.strip() for acc in account_list if acc.strip()]
-
         if not account_list:
-            st.error("No valid account numbers to process.")
+            st.error("Please enter at least one account number.")
             return
 
         # Initialize scraper
@@ -69,6 +104,7 @@ def main():
                 # Add current bill info
                 current_results.append({
                     "Account Number": account,
+                    "Address": bill_info['current'].get("Service Address", "N/A"),
                     "Current Balance": bill_info['current'].get("Current Balance", "N/A"),
                     "Previous Balance": bill_info['current'].get("Previous Balance", "N/A"),
                     "Last Pay Date": bill_info['current'].get("Last Pay Date", "N/A"),
@@ -116,7 +152,33 @@ def main():
         # Export options
         st.subheader("Export Options")
 
-        # Current bills export
+        # Google Sheets export
+        if has_sheets_access and input_method == "Google Sheets Import" and spreadsheet_id:
+            if st.button("Export Results to Google Sheets"):
+                try:
+                    # Export current bills
+                    current_range = f"{range_name.split('!')[0]}!A{range_name.split('!')[1].split(':')[0].split('A')[1]}"
+                    sheets_handler.export_results(
+                        spreadsheet_id,
+                        f"{current_range}_results",
+                        current_results,
+                        list(current_results[0].keys()) if current_results else []
+                    )
+
+                    # Export historical data if available
+                    if historical_df is not None and not historical_df.empty:
+                        sheets_handler.export_results(
+                            spreadsheet_id,
+                            f"{current_range}_history",
+                            historical_results,
+                            list(historical_results[0].keys())
+                        )
+
+                    st.success("Successfully exported results to Google Sheets")
+                except Exception as e:
+                    st.error(f"Error exporting to Google Sheets: {str(e)}")
+
+        # File downloads
         col1, col2 = st.columns(2)
 
         with col1:
