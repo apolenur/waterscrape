@@ -10,10 +10,7 @@ import logging
 from datetime import datetime
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.DEBUG)  # Changed to DEBUG for more detailed logs
 logger = logging.getLogger(__name__)
 
 # If modifying these scopes, delete the file token.json.
@@ -29,35 +26,44 @@ class GoogleSheetsHandler:
         try:
             if os.environ.get('GOOGLE_CREDENTIALS'):
                 logger.info("Found GOOGLE_CREDENTIALS in environment")
-                creds_data = json.loads(os.environ['GOOGLE_CREDENTIALS'])
+                try:
+                    creds_data = json.loads(os.environ['GOOGLE_CREDENTIALS'])
+                    logger.info(f"Credential type: {creds_data.get('type', 'unknown')}")
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse credentials JSON: {e}")
+                    raise ValueError("Invalid credentials JSON format")
 
-                # Check if this is a service account credential
-                if creds_data.get('type') == 'service_account':
-                    logger.info("Using service account credentials")
-                    self.creds = service_account.Credentials.from_service_account_info(
-                        creds_data, 
-                        scopes=SCOPES
-                    )
-                else:
-                    logger.info("Using authorized user credentials")
-                    self.creds = Credentials.from_authorized_user_info(creds_data, SCOPES)
+                required_fields = ['type', 'project_id', 'private_key', 'client_email']
+                if not all(field in creds_data for field in required_fields):
+                    missing = [f for f in required_fields if f not in creds_data]
+                    logger.error(f"Missing required fields in credentials: {missing}")
+                    raise ValueError(f"Missing required fields in credentials: {missing}")
 
-                if not self.creds or not self.creds.valid:
-                    if self.creds and self.creds.expired and self.creds.refresh_token:
-                        logger.info("Refreshing expired credentials")
-                        self.creds.refresh(Request())
+                try:
+                    if creds_data['type'] == 'service_account':
+                        logger.info("Using service account credentials")
+                        self.creds = service_account.Credentials.from_service_account_info(
+                            creds_data,
+                            scopes=SCOPES
+                        )
+                        logger.debug("Service account credentials created successfully")
                     else:
-                        raise ValueError("Invalid credentials format")
+                        logger.error(f"Unsupported credential type: {creds_data['type']}")
+                        raise ValueError(f"Unsupported credential type: {creds_data['type']}")
+                except Exception as e:
+                    logger.error(f"Error creating service account credentials: {str(e)}")
+                    raise ValueError(f"Failed to create credentials: {str(e)}")
 
-                self.service = build('sheets', 'v4', credentials=self.creds)
-                logger.info("Successfully authenticated with Google Sheets API")
+                try:
+                    self.service = build('sheets', 'v4', credentials=self.creds)
+                    logger.info("Successfully authenticated with Google Sheets API")
+                except Exception as e:
+                    logger.error(f"Error building sheets service: {str(e)}")
+                    raise
             else:
                 logger.error("GOOGLE_CREDENTIALS environment variable not found")
                 raise ValueError("Google Sheets credentials not found in environment")
 
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse credentials JSON: {str(e)}")
-            raise ValueError(f"Invalid credentials format: {str(e)}")
         except Exception as e:
             logger.error(f"Authentication error: {str(e)}")
             raise Exception(f"Failed to authenticate with Google Sheets: {str(e)}")
