@@ -160,14 +160,14 @@ def show_main_app(sheets_handler: GoogleSheetsHandler):
 
 def main():
     """Main application entry point"""
-    # Show authentication screen
-    st.title("Baltimore City Water Bill Scraper 💧")
-
+    # Initialize session state if not already done
     if 'authenticated' not in st.session_state:
         st.session_state.authenticated = False
         st.session_state.sheets_handler = None
 
+    # Show authentication screen if not authenticated
     if not st.session_state.authenticated:
+        st.title("Baltimore City Water Bill Scraper 💧")
         st.markdown("""
         ### Welcome to Baltimore Water Bill Scraper
         Please authenticate with Google Sheets to continue.
@@ -178,7 +178,7 @@ def main():
             if success:
                 st.session_state.authenticated = True
                 st.session_state.sheets_handler = sheets_handler
-                st.experimental_rerun()
+                st.rerun()  # Updated from experimental_rerun
             else:
                 st.stop()
         st.stop()
