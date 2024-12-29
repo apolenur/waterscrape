@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 SPREADSHEET_ID = "1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY"
-SHEET_RANGE = "Sheet1!B2:B"
+SHEET_RANGE = "Sheet1!A3:A20"
 
 st.set_page_config(
     page_title="Baltimore Water Bill Scraper",
@@ -27,23 +27,24 @@ def export_to_excel(df: pd.DataFrame) -> bytes:
         df.to_excel(writer, index=False)
     return output.getvalue()
 
-def main():
+def authenticate() -> tuple[bool, GoogleSheetsHandler]:
+    """Handle Google Sheets authentication"""
+    try:
+        sheets_handler = GoogleSheetsHandler()
+        sheets_handler.authenticate()
+        return True, sheets_handler
+    except Exception as e:
+        st.error("❌ Authentication Failed")
+        st.error(f"Error: {str(e)}")
+        return False, None
+
+def show_main_app(sheets_handler: GoogleSheetsHandler):
+    """Display main application content"""
     st.title("Baltimore City Water Bill Scraper 💧")
 
     # Initialize session state for storing results
     if 'current_results' not in st.session_state:
         st.session_state.current_results = []
-
-    # Initialize Google Sheets handler
-    sheets_handler = None
-    try:
-        sheets_handler = GoogleSheetsHandler()
-        sheets_handler.authenticate()
-        has_sheets_access = True
-    except Exception as e:
-        has_sheets_access = False
-        st.error("❌ Google Sheets integration unavailable. Please check credentials.")
-        return
 
     st.markdown("""
     This tool fetches water bill information from [Baltimore City Water](https://pay.baltimorecity.gov/water)
@@ -84,12 +85,12 @@ def main():
                         "Current Balance": bill_info.get("Current Balance", "N/A"),
                         "Last Pay Date": bill_info.get("Last Pay Date", "N/A"),
                         "Last Pay Amount": bill_info.get("Last Pay Amount", "N/A"),
-                        "Timestamp": datetime.now(pytz.timezone('US/Eastern')).strftime("%Y-%m-%d %H:%M:%S %Z"),
+                        "Timestamp": datetime.now(pytz.timezone('US/Eastern')).strftime("%Y-%m-%d %H:%M"),
                         "Status": "Success"
                     })
                 except Exception as e:
                     st.session_state.current_results.append({
-                        "Timestamp": datetime.now(pytz.timezone('US/Eastern')).strftime("%Y-%m-%d %H:%M:%S %Z"),
+                        "Timestamp": datetime.now(pytz.timezone('US/Eastern')).strftime("%Y-%m-%d %H:%M"),
                         "Account Number": account,
                         "Status": str(e)
                     })
@@ -97,7 +98,7 @@ def main():
                 progress_bar.progress(idx / total)
                 time.sleep(1)  # Add delay to avoid overwhelming the server
 
-            status_text.text("Processing complete")
+            status_text.text("Processing complete!")
 
         except Exception as e:
             st.error(f"Failed to read account numbers: {str(e)}")
@@ -128,7 +129,6 @@ def main():
                     try:
                         # Calculate export range
                         sheet_name = SHEET_RANGE.split('!')[0]
-                        #export_range = f"{sheet_name}!B1:{chr(65 + len(st.session_state.current_results[0].keys()) - 1)}{len(st.session_state.current_results) + 1}"
                         export_range = f"{sheet_name}!B1:M{len(st.session_state.current_results) + 1}"
 
                         export_result = sheets_handler.export_results(
@@ -157,6 +157,34 @@ def main():
             file_name=f"water_bills_{datetime.now().strftime('%Y%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
+def main():
+    """Main application entry point"""
+    # Show authentication screen
+    st.title("Baltimore City Water Bill Scraper 💧")
+
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+        st.session_state.sheets_handler = None
+
+    if not st.session_state.authenticated:
+        st.markdown("""
+        ### Welcome to Baltimore Water Bill Scraper
+        Please authenticate with Google Sheets to continue.
+        """)
+
+        if st.button("Authenticate"):
+            success, sheets_handler = authenticate()
+            if success:
+                st.session_state.authenticated = True
+                st.session_state.sheets_handler = sheets_handler
+                st.experimental_rerun()
+            else:
+                st.stop()
+        st.stop()
+
+    # Show main application if authenticated
+    show_main_app(st.session_state.sheets_handler)
 
 if __name__ == "__main__":
     main()
