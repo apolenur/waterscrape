@@ -1,10 +1,12 @@
 import requests
 from bs4 import BeautifulSoup
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import time
 import re
 import logging
 import json
+import pandas as pd
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,13 +25,13 @@ class BaltimoreWaterScraper:
 
     def get_bill_info(self, account_number: str) -> Dict[str, str]:
         """
-        Scrapes water bill information for a given account number.
+        Scrapes current and historical water bill information for a given account number.
 
         Args:
             account_number: The water bill account number to search for
 
         Returns:
-            Dictionary containing bill information
+            Dictionary containing current bill information and history
 
         Raises:
             Exception: If scraping fails or data cannot be found
@@ -54,7 +56,7 @@ class BaltimoreWaterScraper:
                 logger.debug(f"Page content: {soup.prettify()[:500]}...")
                 raise Exception("Could not find search form")
 
-            # Extract all hidden fields
+            # Extract hidden fields
             hidden_fields = {}
             for hidden in form.find_all('input', type='hidden'):
                 hidden_fields[hidden.get('name')] = hidden.get('value', '')
@@ -70,7 +72,7 @@ class BaltimoreWaterScraper:
             # Get the actual field name from the input
             account_field_name = account_input.get('name', 'accountNumber')
 
-            # Prepare search data with all required fields
+            # Prepare search data
             search_data = {
                 **hidden_fields,
                 'AccountNumber': account_number,
@@ -84,7 +86,6 @@ class BaltimoreWaterScraper:
             # Submit search and get water bill details
             search_response = self.session.post(
                 self.base_url+ '/_getInfoByAccountNumber',
-                #'https://pay.baltimorecity.gov/water/_getInfoByAccountNumber',
                 data=search_data,
                 timeout=30,
                 headers={
@@ -106,22 +107,31 @@ class BaltimoreWaterScraper:
             # Save response HTML for debugging
             logger.debug(f"Response HTML: {results_soup.prettify()[:1000000]}...")
 
-            # Extract bill information
-            bill_info = {
+            # Extract current bill information
+            current_bill_info = {
                 'Current Balance': self._extract_value(results_soup, 'Current Balance'),
                 'Previous Balance': self._extract_value(results_soup, 'Previous Balance'),
                 'Last Pay Date': self._extract_value(results_soup, 'Last Pay Date'),
                 'Last Pay Amount': self._extract_value(results_soup, 'Last Pay Amount')
             }
 
-            logger.info(f"Extracted bill information: {bill_info}")
+            # Extract bill history from the table
+            bill_history = self._extract_bill_history(results_soup)
+
+            # Combine current and historical information
+            result = {
+                'current': current_bill_info,
+                'history': bill_history
+            }
+
+            logger.info(f"Extracted bill information: {result}")
 
             # Validate extracted data
-            if all(v == 'N/A' for v in bill_info.values()):
+            if all(v == 'N/A' for v in current_bill_info.values()) and not bill_history:
                 logger.error("No bill information found in the response")
                 raise Exception("No bill information found")
 
-            return bill_info
+            return result
 
         except requests.RequestException as e:
             logger.error(f"Network error occurred: {str(e)}")
@@ -140,8 +150,7 @@ class BaltimoreWaterScraper:
             <p><b>Current Balance</b> $ 14.00</p>
         </div>
         """
-        # import pdb; pdb.set_trace()
-        
+
         try:
             # Find all row divs with either class
             rows = soup.find_all('div', class_=['row', 'rowcontenteditable='])
@@ -171,3 +180,39 @@ class BaltimoreWaterScraper:
         except Exception as e:
             logger.error(f"Error extracting value for {field_name}: {str(e)}")
             return 'N/A'
+
+    def _extract_bill_history(self, soup: BeautifulSoup) -> List[Dict[str, str]]:
+        """
+        Extracts bill history from the billing history table.
+
+        Returns:
+            List of dictionaries containing historical bill information
+        """
+        history = []
+        try:
+            # Find the billing history table
+            table = soup.find('table', {'id': 'billing-history'})
+            if not table:
+                logger.debug("No billing history table found")
+                return history
+
+            # Extract headers
+            headers = []
+            for th in table.find_all('th'):
+                headers.append(th.text.strip())
+
+            # Extract rows
+            for row in table.find_all('tr')[1:]:  # Skip header row
+                cells = row.find_all('td')
+                if len(cells) == len(headers):
+                    entry = {}
+                    for header, cell in zip(headers, cells):
+                        entry[header] = cell.text.strip()
+                    history.append(entry)
+
+            logger.info(f"Extracted {len(history)} historical bill entries")
+            return history
+
+        except Exception as e:
+            logger.error(f"Error extracting bill history: {str(e)}")
+            return history
