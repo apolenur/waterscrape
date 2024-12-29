@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 SPREADSHEET_ID = "1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY"
-SHEET_RANGE = "Sheet1!A2:A"
+SHEET_RANGE = "Sheet1!A3:A20"
 
 st.set_page_config(
     page_title="Baltimore Water Bill Scraper",
@@ -44,10 +44,24 @@ def main():
         st.error("❌ Google Sheets integration unavailable. Please check credentials.")
         return
 
-    st.markdown("""
-    This tool fetches water bill information from [Baltimore City Water](https://pay.baltimorecity.gov/water)
-    using account numbers stored in [this Google Sheet](https://docs.google.com/spreadsheets/d/1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY).
-    """)
+    # Main description and spreadsheet link
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("""
+        This tool fetches water bill information from [Baltimore City Water](https://pay.baltimorecity.gov/water)
+        using account numbers stored in [this Google Sheet](https://docs.google.com/spreadsheets/d/1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY).
+        """)
+    with col2:
+        if st.button("📋 Copy Sheet Link"):
+            st.write("✅ Link copied!")
+            st.markdown(
+                f"""
+                <script>
+                    navigator.clipboard.writeText('https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}');
+                </script>
+                """,
+                unsafe_allow_html=True
+            )
 
     if st.button("Fetch Water Bills"):
         try:
