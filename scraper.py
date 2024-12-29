@@ -73,9 +73,9 @@ class BaltimoreWaterScraper:
             # Prepare search data with all required fields
             search_data = {
                 **hidden_fields,
-                account_field_name: account_number,
+                'AccountNumber': account_number,
                 'searchType': 'account',
-                'action': 'search',
+                'action': '/water/_getInfoByAccountNumber',
                 'submit': 'buttonSubmitAccountNumber'  # Use the submit button ID
             }
 
@@ -83,7 +83,8 @@ class BaltimoreWaterScraper:
 
             # Submit search and get water bill details
             search_response = self.session.post(
-                self.base_url,
+                self.base_url+ '/_getInfoByAccountNumber',
+                #'https://pay.baltimorecity.gov/water/_getInfoByAccountNumber',
                 data=search_data,
                 timeout=30,
                 headers={
@@ -103,7 +104,7 @@ class BaltimoreWaterScraper:
             results_soup = BeautifulSoup(search_response.text, 'html.parser')
 
             # Save response HTML for debugging
-            logger.debug(f"Response HTML: {results_soup.prettify()[:1000]}...")
+            logger.debug(f"Response HTML: {results_soup.prettify()[:1000000]}...")
 
             # Extract bill information
             bill_info = {
@@ -139,6 +140,8 @@ class BaltimoreWaterScraper:
             <p><b>Current Balance</b> $ 14.00</p>
         </div>
         """
+        # import pdb; pdb.set_trace()
+        
         try:
             # Find all row divs
             rows = soup.find_all('div', class_='row')
@@ -151,6 +154,7 @@ class BaltimoreWaterScraper:
 
                 # Find bold tag with field name
                 b_tag = p_tag.find('b')
+                logger.info(f" --->[{b_tag}]")
                 if not b_tag or not re.search(field_name, b_tag.text, re.IGNORECASE):
                     continue
 
