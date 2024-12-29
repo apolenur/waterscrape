@@ -100,7 +100,13 @@ def troubleshoot_sheets_auth() -> Tuple[bool, Dict[str, str]]:
 def main():
     st.title("Baltimore City Water Bill Scraper 💧")
 
-    logger.info('FDASFASDFASDFASFASFASFDF')
+    # Initialize session state for storing results
+    if 'current_results' not in st.session_state:
+        st.session_state.current_results = []
+    if 'spreadsheet_id' not in st.session_state:
+        st.session_state.spreadsheet_id = None
+    if 'range_name' not in st.session_state:
+        st.session_state.range_name = None
 
     # Add troubleshooting section in sidebar
     with st.sidebar:
@@ -160,19 +166,19 @@ def main():
         # Google Sheets input
         col1, col2 = st.columns(2)
         with col1:
-            spreadsheet_id = st.text_input(
+            st.session_state.spreadsheet_id = st.text_input(
                 "Enter Google Spreadsheet ID:",
                 help="You can find this in the spreadsheet URL"
             )
         with col2:
-            range_name = st.text_input(
+            st.session_state.range_name = st.text_input(
                 "Enter Range (e.g., Sheet1!A2:A10):",
                 help="Specify the range containing account numbers"
             )
 
-        if spreadsheet_id and range_name:
+        if st.session_state.spreadsheet_id and st.session_state.range_name:
             try:
-                account_list = sheets_handler.read_accounts(spreadsheet_id, range_name)
+                account_list = sheets_handler.read_accounts(st.session_state.spreadsheet_id, st.session_state.range_name)
                 st.success(f"Successfully loaded {len(account_list)} account numbers from Google Sheets")
             except Exception as e:
                 st.error(f"Error reading from Google Sheets: {str(e)}")
@@ -191,7 +197,7 @@ def main():
         status_text = st.empty()
         results_container = st.empty()
 
-        current_results = []
+        st.session_state.current_results = []
         total = len(account_list)
 
         # Process each account number
@@ -201,7 +207,7 @@ def main():
                 bill_info = scraper.get_bill_info(account)
 
                 # Add current bill info
-                current_results.append({
+                st.session_state.current_results.append({
                     "Account Number": account,
                     "Address": bill_info.get("Service Address", "N/A"),
                     "Current Balance": bill_info.get("Current Balance", "N/A"),
@@ -212,7 +218,7 @@ def main():
                 })
 
             except Exception as e:
-                current_results.append({
+                st.session_state.current_results.append({
                     "Account Number": account,
                     "Current Balance": "Error",
                     "Previous Balance": "Error",
@@ -224,10 +230,10 @@ def main():
             progress_bar.progress(idx / total)
             time.sleep(1)  # Add delay to avoid overwhelming the server
 
+    # Display results if available
+    if st.session_state.current_results:
         # Create DataFrame
-        current_df = pd.DataFrame(current_results)
-
-        status_text.text("Processing complete!")
+        current_df = pd.DataFrame(st.session_state.current_results)
 
         # Display results
         st.subheader("Water Bill Information")
@@ -241,30 +247,27 @@ def main():
         st.subheader("Export Options")
 
         # Google Sheets export
-        if has_sheets_access and input_method == "Google Sheets Import" and spreadsheet_id:
+        if has_sheets_access and input_method == "Google Sheets Import" and st.session_state.spreadsheet_id:
             if st.button("Export Results to Google Sheets"):
                 try:
-                    logging.info(f"Exporting results to Google Sheets: {spreadsheet_id} - {range_name}")
+                    logging.info(f"Exporting results to Google Sheets: {st.session_state.spreadsheet_id}")
 
                     # Calculate export range more reliably
-                    sheet_name = range_name.split('!')[0]
-                    export_range = f"{sheet_name}!A1:{chr(65 + len(current_results[0].keys()) - 1)}{len(current_results) + 1}"
+                    sheet_name = st.session_state.range_name.split('!')[0]
+                    export_range = f"{sheet_name}!A1:{chr(65 + len(st.session_state.current_results[0].keys()) - 1)}{len(st.session_state.current_results) + 1}"
 
                     logging.info(f"Calculated export range: {export_range}")
 
-                    if current_results:
-                        export_result = sheets_handler.export_results(
-                            spreadsheet_id,
-                            export_range,
-                            current_results,
-                            list(current_results[0].keys())
-                        )
+                    export_result = sheets_handler.export_results(
+                        st.session_state.spreadsheet_id,
+                        export_range,
+                        st.session_state.current_results,
+                        list(st.session_state.current_results[0].keys())
+                    )
 
-                        if export_result:
-                            st.success(f"Successfully exported {len(current_results)} rows to Google Sheets")
-                            st.info(f"Data exported to sheet: {sheet_name}")
-                    else:
-                        st.warning("No data to export")
+                    if export_result:
+                        st.success(f"Successfully exported {len(st.session_state.current_results)} rows to Google Sheets")
+                        st.info(f"Data exported to sheet: {sheet_name}")
 
                 except ValueError as e:
                     st.error(f"Export failed: {str(e)}")
