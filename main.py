@@ -5,6 +5,10 @@ import time
 from datetime import datetime
 import io
 from sheets_handler import GoogleSheetsHandler
+import os
+from google.oauth2 import service_account
+import json
+from typing import Dict, Tuple
 
 st.set_page_config(
     page_title="Baltimore Water Bill Scraper",
@@ -21,8 +25,97 @@ def export_to_excel(df: pd.DataFrame, filename: str) -> bytes:
         df.to_excel(writer, index=False)
     return output.getvalue()
 
+def troubleshoot_sheets_auth() -> Tuple[bool, Dict[str, str]]:
+    """
+    Performs a series of checks to diagnose Google Sheets authentication issues.
+
+    Returns:
+        Tuple of (success: bool, diagnostics: Dict[str, str])
+    """
+    diagnostics = {}
+
+    # Check 1: Verify GOOGLE_CREDENTIALS environment variable
+    if not os.environ.get('GOOGLE_CREDENTIALS'):
+        return False, {
+            "status": "error",
+            "message": "GOOGLE_CREDENTIALS environment variable not found",
+            "fix": "Add your Google service account credentials to the GOOGLE_CREDENTIALS secret"
+        }
+
+    try:
+        # Check 2: Validate JSON format
+        creds_data = json.loads(os.environ['GOOGLE_CREDENTIALS'])
+        diagnostics["json_format"] = "✅ Credentials JSON format is valid"
+
+        # Check 3: Verify required fields
+        required_fields = ['type', 'project_id', 'private_key', 'client_email']
+        missing_fields = [f for f in required_fields if f not in creds_data]
+
+        if missing_fields:
+            return False, {
+                "status": "error",
+                "message": f"Missing required fields: {', '.join(missing_fields)}",
+                "fix": "Ensure your service account credentials contain all required fields"
+            }
+
+        diagnostics["required_fields"] = "✅ All required credential fields present"
+
+        # Check 4: Verify credential type
+        if creds_data['type'] != 'service_account':
+            return False, {
+                "status": "error",
+                "message": "Invalid credential type. Found: " + creds_data['type'],
+                "fix": "Use a service account credential JSON from Google Cloud Console"
+            }
+
+        diagnostics["credential_type"] = "✅ Using service account credentials"
+
+        # Check 5: Test credential creation
+        creds = service_account.Credentials.from_service_account_info(
+            creds_data,
+            scopes=['https://www.googleapis.com/auth/spreadsheets']
+        )
+        diagnostics["credential_creation"] = "✅ Successfully created credentials"
+
+        return True, diagnostics
+
+    except json.JSONDecodeError:
+        return False, {
+            "status": "error",
+            "message": "Invalid JSON format in credentials",
+            "fix": "Verify that your credentials JSON is properly formatted"
+        }
+    except Exception as e:
+        return False, {
+            "status": "error",
+            "message": str(e),
+            "fix": "Check the error message and ensure your credentials are correct"
+        }
+
 def main():
     st.title("Baltimore City Water Bill Scraper 💧")
+
+    # Add troubleshooting section in sidebar
+    with st.sidebar:
+        st.header("🔧 Troubleshooting")
+        if st.button("Check Google Sheets Setup"):
+            success, results = troubleshoot_sheets_auth()
+
+            if success:
+                st.success("✅ Google Sheets authentication is properly configured!")
+                for check, status in results.items():
+                    st.write(status)
+            else:
+                st.error("❌ Authentication issues detected")
+                st.write("**Error:**", results["message"])
+                st.write("**How to fix:**", results["fix"])
+                st.markdown("""
+                **Need help?**
+                1. Verify you have created a service account in Google Cloud Console
+                2. Ensure the Google Sheets API is enabled
+                3. Download and use the complete service account JSON
+                4. Share your Google Sheet with the service account email
+                """)
 
     # Initialize Google Sheets handler
     sheets_handler = None
@@ -139,8 +232,8 @@ def main():
         # Display current results
         st.subheader("Current Bill Information")
         st.dataframe(
-            current_df.style.apply(lambda x: ['background-color: #ffcdd2' if v == 'Error' 
-                                    else '' for v in x], axis=1),
+            current_df.style.apply(lambda x: ['background-color: #ffcdd2' if v == 'Error'
+                                            else '' for v in x], axis=1),
             use_container_width=True
         )
 
