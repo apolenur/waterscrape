@@ -8,6 +8,8 @@ import pytz
 import hashlib
 import logging
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Constants
@@ -32,8 +34,18 @@ def hash_password(password: str) -> str:
 def authenticate(username: str, password: str) -> bool:
     """Verify username and password against hardcoded credentials"""
     if username not in CREDENTIALS:
+        logger.info(f"Login attempt with invalid username: {username}")
         return False
-    return CREDENTIALS[username] == hash_password(password)
+
+    hashed_password = hash_password(password)
+    is_valid = CREDENTIALS[username] == hashed_password
+
+    if is_valid:
+        logger.info(f"Successful login for user: {username}")
+    else:
+        logger.info(f"Failed login attempt for user: {username}")
+
+    return is_valid
 
 def show_login_page():
     """Display login form"""
@@ -81,6 +93,7 @@ def show_main_app():
     if st.button("Logout"):
         st.session_state.authenticated = False
         st.session_state.username = None
+        st.session_state.current_results = []
         st.rerun()
 
     if st.button("Fetch Water Bills"):
@@ -162,14 +175,13 @@ def main():
     if 'authenticated' not in st.session_state:
         st.session_state.authenticated = False
         st.session_state.username = None
+        st.session_state.current_results = []
 
     # Show login page if not authenticated
     if not st.session_state.authenticated:
         show_login_page()
-        st.stop()
-
-    # Show main application if authenticated
-    show_main_app()
+    else:
+        show_main_app()
 
 if __name__ == "__main__":
     main()
