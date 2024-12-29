@@ -1,3 +1,7 @@
+
+import hmac
+import hashlib
+
 import streamlit as st
 import pandas as pd
 from scraper import BaltimoreWaterScraper
@@ -6,6 +10,18 @@ from datetime import datetime
 import io
 import pytz
 from sheets_handler import GoogleSheetsHandler
+
+# Authentication config
+USERS = {
+    "admin": "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"  # password is 'admin'
+}
+
+def verify_password(username: str, password: str) -> bool:
+    if username not in USERS:
+        return False
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    return hmac.compare_digest(password_hash, USERS[username])
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,6 +44,22 @@ def export_to_excel(df: pd.DataFrame) -> bytes:
     return output.getvalue()
 
 def main():
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+        
+    if not st.session_state.authenticated:
+        st.title("Login")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        
+        if st.button("Login"):
+            if verify_password(username, password):
+                st.session_state.authenticated = True
+                st.experimental_rerun()
+            else:
+                st.error("Invalid username or password")
+        return
+        
     st.title("Baltimore City Water Bill Scraper 💧")
 
     # Initialize session state for storing results
