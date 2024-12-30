@@ -10,10 +10,13 @@ from datetime import datetime
 import io
 import pytz
 from sheets_handler import GoogleSheetsHandler
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Authentication config
 USERS = {
-    "admin": "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"  # password is 'admin'
+    "rutusllc": "fc8cc839d6a864198c836372483a31ca83e3acf6dede11f0c2b94f83e9df1f5e"  # password is 'Make-Them-Finally-Pay-Water'
 }
 
 def verify_password(username: str, password: str) -> bool:
@@ -22,9 +25,7 @@ def verify_password(username: str, password: str) -> bool:
     password_hash = hashlib.sha256(password.encode()).hexdigest()
     return hmac.compare_digest(password_hash, USERS[username])
 
-import logging
 
-logger = logging.getLogger(__name__)
 
 # Constants
 SPREADSHEET_ID = "1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY"
@@ -71,15 +72,15 @@ def main():
     try:
         sheets_handler = GoogleSheetsHandler()
         sheets_handler.authenticate()
-        has_sheets_access = True
     except Exception as e:
-        has_sheets_access = False
-        st.error("❌ Google Sheets integration unavailable. Please check credentials.")
+        st.error(f"❌ Google Sheets integration unavailable. Please check credentials.{str(e)}")
         return
 
     st.markdown("""
     This tool fetches water bill information from [Baltimore City Water](https://pay.baltimorecity.gov/water)
-    using account numbers stored in [this Google Sheet](https://docs.google.com/spreadsheets/d/1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY).
+    using account numbers stored in [this Google Sheet](https://docs.google.com/spreadsheets/d/1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY) and store results back in the same sheet.
+
+    [Tenants With Balance > $200](https://docs.google.com/spreadsheets/d/1yFqPWBMOAOm3O_Nr8tHcrnxfV7lccpCyDhQoJ_C5pKY/edit?gid=0#gid=0&fvid=1290014695)
     """)
 
     if st.button("Fetch Water Bills"):
